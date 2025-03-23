@@ -44,6 +44,13 @@ RecyclerView.Adapter<ToDoAdapter.ToDoViewHolder>(){
             }
         }
     }
+
+    fun setList(newList: List<ToDoData>) {
+        list.clear()
+        list.addAll(newList)
+        notifyDataSetChanged()
+    }
+
     interface TodoAdapterClicksInterface{
         fun onDeleteItemClicked(toDoData: ToDoData )
         fun onEditItemClicked(toDoData: ToDoData )

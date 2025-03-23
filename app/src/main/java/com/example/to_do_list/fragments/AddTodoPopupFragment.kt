@@ -1,26 +1,23 @@
 package com.example.to_do_list.fragments
 
 import android.os.Bundle
-import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.fragment.app.DialogFragment
-import com.example.to_do_list.R
 import com.example.to_do_list.databinding.FragmentAddTodoPopupBinding
 import com.example.to_do_list.fragments.utils.ToDoData
 import com.google.android.material.textfield.TextInputEditText
 
-
 class AddTodoPopupFragment : DialogFragment() {
 
-    private lateinit var binding: FragmentAddTodoPopupBinding
+    private var _binding: FragmentAddTodoPopupBinding? = null
+    private val binding get() = _binding ?: error("Binding is not null")
     private lateinit var listener: DialogNextBtnClickListener
     private var toDoData: ToDoData? = null
 
-    fun setListener(listener: DialogNextBtnClickListener){
+    fun setListener(listener: DialogNextBtnClickListener) {
         this.listener = listener
     }
 
@@ -28,7 +25,7 @@ class AddTodoPopupFragment : DialogFragment() {
         const val Tag = "AddToDoPopUpFragment"
 
         @JvmStatic
-        fun newInstance(taskID:String, task:String) = AddTodoPopupFragment().apply {
+        fun newInstance(taskID: String, task: String) = AddTodoPopupFragment().apply {
             arguments = Bundle().apply {
                 putString("taskID", taskID)
                 putString("task", task)
@@ -39,9 +36,8 @@ class AddTodoPopupFragment : DialogFragment() {
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View? {
-        // Inflate the layout for this fragment
-        binding= FragmentAddTodoPopupBinding.inflate(inflater,container,false)
+    ): View {
+        _binding = FragmentAddTodoPopupBinding.inflate(inflater, container, false)
         return binding.root
     }
 
@@ -59,31 +55,37 @@ class AddTodoPopupFragment : DialogFragment() {
         registerEvents()
     }
 
-    private fun registerEvents(){
-        binding.todoNextBtn.setOnClickListener(){
+    private fun registerEvents() {
+        binding.todoNextBtn.setOnClickListener {
             val todoTask = binding.todoEt.text.toString()
-            if (todoTask.isNotEmpty()){
+            if (todoTask.isNotEmpty()) {
                 if (toDoData == null) {
-                    listener.onSaveTask(todoTask,binding.todoEt)
+                    listener.onSaveTask(todoTask, binding.todoEt)
                 } else {
                     toDoData?.task = todoTask
-                    listener.onUpdateTask(toDoData!!, binding.todoEt)
+                    toDoData?.let {
+                        listener.onUpdateTask(it, binding.todoEt)
+                    }
                 }
+                dismiss()
 
-            }else{
-                Toast.makeText(context,"Please type some task",Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "Please type some task", Toast.LENGTH_SHORT).show()
             }
         }
 
-        binding.todoClose.setOnClickListener{
+        binding.todoClose.setOnClickListener {
             dismiss()
         }
     }
 
-    interface DialogNextBtnClickListener{
-        fun onSaveTask(todo: String,todoEt : TextInputEditText)
+    interface DialogNextBtnClickListener {
+        fun onSaveTask(todo: String, todoEt: TextInputEditText)
         fun onUpdateTask(toDoData: ToDoData, todoEt: TextInputEditText)
     }
 
-
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+    }
 }

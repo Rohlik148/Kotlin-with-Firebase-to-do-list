@@ -46,9 +46,11 @@
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/todoEt"
                     android:layout_width="match_parent"
+                    android:textColor="@color/black"
                     android:layout_height="50dp"
                     android:background="@color/white"
                     android:hint="@string/type_your_task"
+                    android:textColorHint="@color/black"
                     android:inputType="textEmailAddress"
                     android:paddingStart="12dp"
                     android:paddingTop="15dp" />

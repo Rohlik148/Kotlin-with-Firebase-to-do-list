@@ -1,46 +1,46 @@
 package com.example.to_do_list.fragments
 
 import android.os.Bundle
-import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.Navigation
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.example.to_do_list.MainActivity
 import com.example.to_do_list.R
 import com.example.to_do_list.databinding.FragmentHomeBinding
-import com.example.to_do_list.databinding.FragmentSignUpBinding
 import com.example.to_do_list.fragments.utils.ToDoAdapter
 import com.example.to_do_list.fragments.utils.ToDoData
+import com.example.to_do_list.viewmodels.HomeViewModel
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.DatabaseReference
-import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ValueEventListener
-
+import kotlinx.coroutines.launch
 
 class HomeFragment : Fragment(), AddTodoPopupFragment.DialogNextBtnClickListener,
     ToDoAdapter.TodoAdapterClicksInterface {
-    private lateinit var auth : FirebaseAuth
-    private lateinit var databaseRef : DatabaseReference
+    private lateinit var auth: FirebaseAuth
     private lateinit var navController: NavController
-    private lateinit var  binding: FragmentHomeBinding
-    private var  popUpFragment: AddTodoPopupFragment? = null
+    private var popUpFragment: AddTodoPopupFragment? = null
     private lateinit var adapter: ToDoAdapter
-    private lateinit var mList:MutableList<ToDoData>
 
+    private val viewModel: HomeViewModel by viewModels()
+
+
+    private var _binding: FragmentHomeBinding? = null
+
+    private val binding get() = _binding ?: error("Binding is not initialized")
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View? {
-        binding= FragmentHomeBinding.inflate(inflater,container,false)
-        // Inflate the layout for this fragment
+    ): View {
+        _binding = FragmentHomeBinding.inflate(inflater, container, false)
         return binding.root
     }
 
@@ -48,102 +48,90 @@ class HomeFragment : Fragment(), AddTodoPopupFragment.DialogNextBtnClickListener
         super.onViewCreated(view, savedInstanceState)
 
         init(view)
-        getDataFromFirebase()
         registerEvents()
+        observeData()
     }
 
-    private fun registerEvents(){
-        binding.addBtnHome.setOnClickListener{
-            if (popUpFragment != null) {
-                childFragmentManager.beginTransaction().remove(popUpFragment!!).commit()
+    private fun observeData() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    viewModel.todoList.collect { list ->
+                        adapter.setList(list)
+                    }
+                }
+                launch {
+                    viewModel.error.collect { error ->
+                        // Show error message
+                        if (error != null) {
+                            Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun registerEvents() {
+        binding.addBtnHome.setOnClickListener {
+            popUpFragment?.let {
+                if (it.isAdded) {
+                    childFragmentManager.beginTransaction().remove(it).commitAllowingStateLoss()
+                    popUpFragment = null
+                }
             }
             popUpFragment = AddTodoPopupFragment()
-            popUpFragment!!.setListener(this)
-            popUpFragment!!.show(childFragmentManager,AddTodoPopupFragment.Tag)
+            popUpFragment?.setListener(this)
+            popUpFragment?.show(childFragmentManager, AddTodoPopupFragment.Tag)
         }
         binding.logout.setOnClickListener {
             FirebaseAuth.getInstance().signOut()
             navController.navigate(R.id.action_homeFragment_to_signInFragment)
         }
     }
-private fun init(view: View){
-    navController = Navigation.findNavController(view)
-    auth = FirebaseAuth.getInstance()
-    databaseRef = FirebaseDatabase.getInstance().reference.child("Tasks").child(auth.currentUser?.uid.toString())
 
-    binding.recyclerView.setHasFixedSize(true)
-    binding.recyclerView.layoutManager = LinearLayoutManager(context)
-    mList = mutableListOf()
-    adapter = ToDoAdapter(mList)
-    adapter.setListener(this)
-    binding.recyclerView.adapter = adapter
-}
+    private fun init(view: View) {
+        navController = Navigation.findNavController(view)
+        auth = FirebaseAuth.getInstance()
 
-    private fun getDataFromFirebase(){
-        databaseRef.addValueEventListener(object :ValueEventListener{
-            override fun onDataChange(snapshot: DataSnapshot) {
-                mList.clear()
-                for (taskSnapShot in snapshot.children){
-                    val todoTask = taskSnapShot.key?.let {
-                        ToDoData(it,taskSnapShot.value.toString())
-                    }
-                    if (todoTask != null){
-                        mList.add(todoTask)
-                    }
-                }
-                adapter.notifyDataSetChanged()
-            }
-
-            override fun onCancelled(error: DatabaseError) {
-                Toast.makeText(context,error.message,Toast.LENGTH_SHORT).show()
-            }
-
-        })
+        binding.recyclerView.setHasFixedSize(true)
+        binding.recyclerView.layoutManager = LinearLayoutManager(context)
+        adapter = ToDoAdapter(mutableListOf())
+        adapter.setListener(this)
+        binding.recyclerView.adapter = adapter
     }
 
     override fun onSaveTask(todo: String, todoEt: TextInputEditText) {
-       databaseRef.push().setValue(todo).addOnCompleteListener{
-           if (it.isSuccessful){
-               Toast.makeText(context,"Saved successfully",Toast.LENGTH_SHORT).show()
-           }else{
-               Toast.makeText(context,it.exception?.message,Toast.LENGTH_SHORT).show()
-           }
-           todoEt.text = null
-           popUpFragment!!.dismiss()
-       }
+        viewModel.saveTask(todo)
+        todoEt.text = null
+        popUpFragment?.dismiss()
     }
 
     override fun onUpdateTask(toDoData: ToDoData, todoEt: TextInputEditText) {
-        val map = HashMap<String, Any>()
-        map[toDoData.taskId] = toDoData.task
-        databaseRef.updateChildren(map).addOnCompleteListener {
-            if (it.isSuccessful) {
-                Toast.makeText(context,"Updated successfully",Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(context,it.exception?.message,Toast.LENGTH_SHORT).show()
-            }
-            todoEt.text = null
-            popUpFragment!!.dismiss()
-        }
+        viewModel.updateTask(toDoData)
+        todoEt.text = null
+        popUpFragment?.dismiss()
     }
 
     override fun onDeleteItemClicked(toDoData: ToDoData) {
-        databaseRef.child(toDoData.taskId).removeValue().addOnCompleteListener{
-            if (it.isSuccessful){
-                Toast.makeText(context,"Deleted successfully",Toast.LENGTH_SHORT).show()
-            }
-            else{Toast.makeText(context,it.exception?.message,Toast.LENGTH_SHORT).show()}
-        }
+        viewModel.deleteTask(toDoData.taskId)
     }
 
     override fun onEditItemClicked(toDoData: ToDoData) {
-        if (popUpFragment != null) {
-            childFragmentManager.beginTransaction().remove(popUpFragment!!).commit()
+        popUpFragment?.let {
+            if (it.isAdded) {
+                childFragmentManager.beginTransaction().remove(it).commitAllowingStateLoss()
+                popUpFragment = null
+            }
         }
 
         popUpFragment = AddTodoPopupFragment.newInstance(toDoData.taskId, toDoData.task)
-        popUpFragment!!.setListener(this)
-        popUpFragment!!.show(childFragmentManager, AddTodoPopupFragment.Tag)
+        popUpFragment?.setListener(this)
+        popUpFragment?.show(childFragmentManager, AddTodoPopupFragment.Tag)
     }
 
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+    }
 }
